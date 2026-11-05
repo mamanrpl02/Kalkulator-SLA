@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ESTIM | SLA Schedule & Calculator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { brand: { 50:"#f0fdf4",100:"#dcfce7",400:"#4ade80",500:"#22c55e",600:"#16a34a",700:"#15803d" } } } }
+    };
+  </script>
+  <style>
+    :root { color-scheme: dark; }
+    input, select { color-scheme: dark; }
+    input[type="time"]::-webkit-calendar-picker-indicator,
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity:.65; }
+    .field { width:100%; background:#020617; border:1px solid #334155; border-radius:.75rem; padding:.65rem .75rem; color:#f8fafc; outline:none; }
+    .field:focus { border-color:#22c55e; box-shadow:0 0 0 2px #22c55e22; }
+    .btn { border-radius:.75rem; padding:.65rem .9rem; font-size:.8rem; font-weight:600; transition:.15s; }
+    .btn-primary { background:#16a34a; color:white; } .btn-primary:hover { background:#15803d; }
+    .btn-muted { background:#334155; color:#e2e8f0; } .btn-muted:hover { background:#475569; }
+    .btn-ghost { color:#4ade80; border:1px solid #334155; } .btn-ghost:hover { background:#0f172a; }
+    .day-row { display:grid; grid-template-columns:minmax(100px,1.15fr) minmax(105px,1fr) minmax(105px,1fr); gap:.6rem; align-items:center; }
+    @media(max-width:640px){ .day-row { grid-template-columns:1fr 1fr; } .day-name { grid-column:1/-1; } }
+    .toggle { accent-color:#22c55e; width:1rem; height:1rem; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 p-3 sm:p-6">
+  <main class="max-w-7xl mx-auto space-y-5">
+    <header class="rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div>
+        <div class="text-xs uppercase tracking-[.18em] text-brand-400 font-semibold mb-2">ESTIM • QA Utility</div>
+        <h1 class="text-2xl sm:text-3xl font-bold">SLA Schedule & Calculator</h1>
+        <p class="text-sm text-slate-400 mt-2 max-w-2xl">Atur jam kerja mingguan, istirahat, dan tanggal libur. Simulasikan Business Elapsed Time atau estimasi SLA Deadline.</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button id="preset8x5" class="btn btn-muted">Preset 8×5</button>
+        <button id="preset24x7" class="btn btn-muted">Preset 24×7</button>
+        <button id="resetBtn" class="btn btn-ghost">Reset</button>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-5">
+      <div class="xl:col-span-7 space-y-5">
+        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="font-semibold text-lg">⚙️ Konfigurasi Schedule</h2>
+              <p class="text-xs text-slate-400 mt-1">Setiap hari memiliki jam sendiri. Pilihan waktu menggunakan kelipatan 30 menit.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <label for="scheduleName" class="text-xs text-slate-400">Nama</label>
+              <input id="scheduleName" class="field max-w-52 text-sm" value="SLA-REQUEST-RESPONSE" />
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <div class="day-row text-[11px] uppercase tracking-wide text-slate-500 px-1">
+              <div class="day-name">Hari / Aktif</div><div>Jam Mulai</div><div>Jam Selesai</div>
+            </div>
+            <div id="weeklySchedule" class="space-y-2"></div>
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2">
+              <span class="text-xs text-slate-500">Hari nonaktif tidak dihitung sebagai jam kerja.</span>
+              <button id="copyWeekdays" class="btn btn-ghost">Samakan Senin–Jumat</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+          <div class="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="font-semibold text-lg">☕ Pengaturan Istirahat</h2>
+              <p class="text-xs text-slate-400 mt-1">Periode istirahat yang overlap dengan jam kerja dikecualikan dari SLA.</p>
+            </div>
+            <label class="flex items-center gap-2 text-xs text-amber-300">
+              <input id="breakEnabled" type="checkbox" class="toggle" checked /> Aktif
+            </label>
+          </div>
+          <div id="breakControls" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="text-xs text-slate-400 space-y-1.5 block">Mulai istirahat
+              <select id="breakStart" class="field"></select>
+            </label>
+            <label class="text-xs text-slate-400 space-y-1.5 block">Selesai istirahat
+              <select id="breakEnd" class="field"></select>
+            </label>
+          </div>
+          <p class="text-[11px] text-slate-500">Saat ini berlaku satu periode istirahat yang sama untuk semua hari aktif. Jam dapat dipilih per 30 menit.</p>
+        </section>
+
+        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="font-semibold text-lg">📅 Tanggal Libur</h2>
+              <p class="text-xs text-slate-400 mt-1">Masukkan tanggal yang harus dikecualikan dari perhitungan.</p>
+            </div>
+            <label class="flex items-center gap-2 text-xs text-slate-300">
+              <input id="holidayEnabled" type="checkbox" class="toggle" checked /> Gunakan tanggal libur
+            </label>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="holidayDate" type="date" class="field sm:max-w-xs" />
+            <input id="holidayName" type="text" placeholder="Nama libur (opsional)" class="field" />
+            <button id="addHoliday" class="btn btn-primary">Tambah</button>
+          </div>
+          <div id="holidayList" class="flex flex-wrap gap-2"></div>
+          <p class="text-[11px] text-slate-500">Daftar libur disimpan sementara di halaman ini. Tidak mengambil data kalender libur dari API.</p>
+        </section>
+
+        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="font-semibold text-lg">🧮 Input Simulasi</h2>
+              <p class="text-xs text-slate-400 mt-1">Pilih jenis kalkulasi dan masukkan waktu tiket.</p>
+            </div>
+            <div class="flex rounded-xl bg-slate-950 border border-slate-700 p-1 gap-1">
+              <button id="modeElapsed" class="btn btn-primary">Elapsed Time</button>
+              <button id="modeDeadline" class="btn btn-muted">SLA Deadline</button>
+            </div>
+          </div>
+
+          <div id="elapsedInputs" class="space-y-3">
+            <label class="block text-xs text-slate-400 space-y-1.5">Start Time
+              <input id="startInput" type="datetime-local" step="1" class="field" value="2026-11-06T16:00:00" />
+            </label>
+            <label class="block text-xs text-slate-400 space-y-1.5">Stop Time
+              <input id="stopInput" type="datetime-local" step="1" class="field" value="2026-11-07T15:00:00" />
+            </label>
+          </div>
+          <div id="deadlineInputs" class="hidden space-y-3">
+            <label class="block text-xs text-slate-400 space-y-1.5">Ticket Created
+              <input id="createdInput" type="datetime-local" step="1" class="field" value="2026-11-06T16:00:00" />
+            </label>
+            <label class="block text-xs text-slate-400 space-y-1.5">Target SLA (jam kerja efektif)
+              <input id="targetHours" type="number" min="0.5" step="0.5" class="field" value="8" />
+            </label>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="calculateBtn" class="btn btn-primary">Hitung SLA</button>
+            <button id="sampleBtn" class="btn btn-muted">Muat Contoh Jumat–Sabtu</button>
+            <button id="nowBtn" class="btn btn-ghost">Gunakan waktu sekarang</button>
+          </div>
+          <div id="errorAlert" class="hidden rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 p-3 text-sm"></div>
+        </section>
+      </div>
+
+      <div class="xl:col-span-5 space-y-5">
+        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-5 xl:sticky xl:top-5">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h2 class="font-semibold text-lg">📊 Hasil Kalkulasi</h2>
+            <span id="resultMode" class="text-[10px] uppercase tracking-wide text-slate-400 bg-slate-950 border border-slate-800 px-2 py-1 rounded-lg">Elapsed Time</span>
+          </div>
+          <div class="rounded-2xl border border-brand-500/30 bg-slate-950 p-5 text-center">
+            <div id="mainLabel" class="text-xs uppercase tracking-wider text-slate-400 mb-2">Business Elapsed Time</div>
+            <div id="mainResult" class="text-2xl sm:text-3xl font-extrabold text-brand-400">0 Jam 0 Menit 0 Detik</div>
+            <div id="mainSub" class="text-xs text-slate-400 mt-2">0.0000 jam efektif</div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="rounded-xl border border-slate-800 bg-slate-950 p-3">
+              <div class="text-[11px] text-slate-500">Durasi Kalender</div><div id="calendarDuration" class="font-semibold mt-1 text-sm">—</div>
+            </div>
+            <div class="rounded-xl border border-slate-800 bg-slate-950 p-3">
+              <div class="text-[11px] text-slate-500">Hari dengan Jam Kerja</div><div id="workDays" class="font-semibold mt-1 text-sm">—</div>
+            </div>
+            <div class="rounded-xl border border-slate-800 bg-slate-950 p-3">
+              <div class="text-[11px] text-slate-500">Hari Nonaktif / Libur</div><div id="offDays" class="font-semibold mt-1 text-sm">—</div>
+            </div>
+            <div class="rounded-xl border border-slate-800 bg-slate-950 p-3">
+              <div class="text-[11px] text-slate-500">Rasio Jam Efektif</div><div id="workRatio" class="font-semibold mt-1 text-sm text-brand-400">—</div>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-semibold">Rincian Per Hari</h3>
+              <span id="breakdownCount" class="text-xs text-slate-500">0 hari</span>
+            </div>
+            <div id="breakdownList" class="max-h-72 overflow-y-auto space-y-2 pr-1">
+              <div class="text-center text-slate-500 text-sm py-5">Klik “Hitung SLA” untuk melihat rincian.</div>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <button id="copyBtn" class="btn btn-muted w-full">📋 Salin Ringkasan</button>
+            <div id="copyToast" class="hidden text-center text-xs text-brand-400">Ringkasan disalin.</div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <footer class="text-center text-[11px] text-slate-600 pb-2">Prototype lokal • HTML + Tailwind CSS + Vanilla JavaScript • Tidak mengirim data ke server</footer>
+  </main>
+
+<script>
+(() => {
+  const DAYS = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+  const dayConfig = [
+    { active:false, start:"08:00", end:"17:00" }, // Sunday
+    { active:true, start:"08:00", end:"17:00" },
+    { active:true, start:"08:00", end:"17:00" },
+    { active:true, start:"08:00", end:"17:00" },
+    { active:true, start:"08:00", end:"17:00" },
+    { active:true, start:"08:00", end:"17:00" },
+    { active:true, start:"08:00", end:"15:00" }
+  ];
+  let holidays = {};
+  let mode = "elapsed";
+  let lastSummary = "";
+
+  const $ = id => document.getElementById(id);
+  const timeOptions = () => {
+    const arr = [];
+    for (let m=0; m<=1440; m+=30) {
+      const h=String(Math.floor(m/60)).padStart(2,"0"), min=String(m%60).padStart(2,"0");
+      arr.push(`${h}:${min}`);
+    }
+    return arr;
+  };
+  const timeSelect = (id, value) => {
+    const el=$(id); el.innerHTML="";
+    timeOptions().forEach(t => { const o=document.createElement("option"); o.value=t; o.textContent=t; el.appendChild(o); });
+    el.value=value;
+  };
+  const renderSchedule = () => {
+    const root=$("weeklySchedule"); root.innerHTML="";
+    DAYS.forEach((day,i) => {
+      const row=document.createElement("div");
+      row.className="day-row rounded-xl border border-slate-800 bg-slate-950/70 p-2";
+      row.innerHTML=`
+        <div class="day-name flex items-center gap-2">
+          <input type="checkbox" class="toggle active-day" data-day="${i}" ${dayConfig[i].active?"checked":""} aria-label="Aktifkan ${day}">
+          <span class="text-sm font-medium ${dayConfig[i].active?"text-slate-200":"text-slate-500"}">${day}</span>
+        </div>
+        <select class="field text-sm start-time" data-day="${i}" ${!dayConfig[i].active?"disabled":""}></select>
+        <select class="field text-sm end-time" data-day="${i}" ${!dayConfig[i].active?"disabled":""}></select>`;
+      root.appendChild(row);
+      const start=row.querySelector(".start-time"), end=row.querySelector(".end-time");
+      timeOptions().forEach(t=>{let a=document.createElement("option");a.value=t;a.textContent=t;start.appendChild(a);let b=document.createElement("option");b.value=t;b.textContent=t;end.appendChild(b);});
+      start.value=dayConfig[i].start; end.value=dayConfig[i].end;
+      row.querySelector(".active-day").addEventListener("change",e=>{
+        dayConfig[i].active=e.target.checked; start.disabled=end.disabled=!e.target.checked;
+        row.querySelector("span").className=`text-sm font-medium ${e.target.checked?"text-slate-200":"text-slate-500"}`;
+        calculate();
+      });
+      start.addEventListener("change",e=>{dayConfig[i].start=e.target.value;calculate();});
+      end.addEventListener("change",e=>{dayConfig[i].end=e.target.value;calculate();});
+    });
+  };
+  const setPreset = type => {
+    if(type==="8x5") {
+      dayConfig.forEach((d,i)=>{d.active=i>=1&&i<=5;d.start="08:00";d.end="17:00";});
+      dayConfig[6].active=false;
+    } else {
+      dayConfig.forEach(d=>{d.active=true;d.start="00:00";d.end="24:00";});
+      // 24x7 mode is represented by daily full-day schedule.
+    }
+    renderSchedule(); calculate();
+  };
+  const parseDate = value => value ? new Date(value) : null;
+  const dateKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const minutesOf = t => {const [h,m]=t.split(":").map(Number);return h*60+m;};
+  const makeDate = (day, mins) => new Date(day.getFullYear(),day.getMonth(),day.getDate(),Math.floor(mins/60),mins%60,0,0);
+  const fmtDateTime = d => d.toLocaleString("id-ID",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  const fmtDate = d => d.toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"});
+  const fmtDuration = sec => {
+    sec=Math.max(0,Math.floor(sec)); const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;
+    return `${h} Jam ${m} Menit ${s} Detik`;
+  };
+  const getIntervals = day => {
+    const idx=day.getDay(), cfg=dayConfig[idx], key=dateKey(day);
+    if(!cfg.active || ($("holidayEnabled").checked && holidays[key])) return [];
+    let start=minutesOf(cfg.start), end=minutesOf(cfg.end);
+    if(end<=start) return []; // overnight schedules are intentionally unsupported in this prototype
+    let intervals=[[start,end]];
+    if($("breakEnabled").checked) {
+      const bs=minutesOf($("breakStart").value), be=minutesOf($("breakEnd").value);
+      if(be>bs) {
+        intervals=intervals.flatMap(([a,b])=>{
+          const result=[];
+          if(a<bs) result.push([a,Math.min(b,bs)]);
+          if(be<b) result.push([Math.max(a,be),b]);
+          if(bs>=b || be<=a) return [[a,b]];
+          return result.filter(([x,y])=>y>x);
+        });
+      }
+    }
+    return intervals;
+  };
+  const dailySegments = (day, from, to) => {
+    return getIntervals(day).map(([a,b])=>[makeDate(day,a),makeDate(day,b)])
+      .map(([a,b])=>[new Date(Math.max(a,from)),new Date(Math.min(b,to))])
+      .filter(([a,b])=>b>a);
+  };
+  const calcElapsed = (start,stop) => {
+    let total=0, breakdown=[], workDayCount=0, offDayCount=0;
+    const cursor=new Date(start.getFullYear(),start.getMonth(),start.getDate());
+    const last=new Date(stop.getFullYear(),stop.getMonth(),stop.getDate());
+    while(cursor<=last) {
+      const day=new Date(cursor), key=dateKey(day), holiday=($("holidayEnabled").checked&&holidays[key])||"";
+      const intervals=getIntervals(day);
+      const segments=dailySegments(day,start,stop);
+      const seconds=segments.reduce((s,[a,b])=>s+(b-a)/1000,0);
+      total+=seconds;
+      const configured=dayConfig[day.getDay()].active;
+      if(intervals.length) workDayCount++;
+      else offDayCount++;
+      breakdown.push({date:key,day:DAYS[day.getDay()],seconds,status:holiday?`Libur: ${holiday}`:configured?"Hari kerja":"Nonaktif",working:intervals.length>0});
+      cursor.setDate(cursor.getDate()+1);
+    }
+    return {total,breakdown,workDayCount,offDayCount,calendar:(stop-start)/1000};
+  };
+  const addBusinessSeconds = (start, targetSeconds) => {
+    if(targetSeconds<=0) return {date:new Date(start), breakdown:[], remaining:0};
+    let remaining=targetSeconds, cur=new Date(start), breakdown=[];
+    // Iterate calendar days with a generous guard, allowing long SLA targets.
+    for(let dayCount=0;dayCount<36600;dayCount++) {
+      const day=new Date(cur.getFullYear(),cur.getMonth(),cur.getDate());
+      const segs=dailySegments(day,cur,new Date(day.getFullYear(),day.getMonth(),day.getDate()+1));
+      let daySeconds=0;
+      for(const [a,b] of segs) {
+        const avail=(b-a)/1000;
+        if(remaining<=avail) {
+          const result=new Date(a.getTime()+remaining*1000);
+          breakdown.push({date:dateKey(day),day:DAYS[day.getDay()],seconds:remaining,status:"Jam kerja",working:true});
+          return {date:result,breakdown,remaining:0};
+        }
+        remaining-=avail; daySeconds+=avail;
+      }
+      if(daySeconds>0) breakdown.push({date:dateKey(day),day:DAYS[day.getDay()],seconds:daySeconds,status:"Jam kerja",working:true});
+      cur.setDate(cur.getDate()+1); cur.setHours(0,0,0,0);
+    }
+    throw new Error("Perhitungan deadline melebihi batas simulasi.");
+  };
+  const renderBreakdown = items => {
+    $("breakdownCount").textContent=`${items.length} hari`;
+    const root=$("breakdownList");
+    if(!items.length){root.innerHTML='<div class="text-center text-slate-500 text-sm py-4">Tidak ada rincian.</div>';return;}
+    root.innerHTML=items.map(item=>{
+      const sec=Math.floor(item.seconds||0);
+      const badge=item.working?"text-emerald-300 bg-emerald-500/10 border-emerald-500/20":"text-slate-400 bg-slate-800 border-slate-700";
+      return `<div class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+        <div class="min-w-0"><div class="text-xs font-mono text-slate-300">${item.date} <span class="text-slate-500">(${item.day})</span></div><div class="text-[10px] text-slate-500 truncate max-w-48">${escapeHtml(item.status)}</div></div>
+        <div class="text-xs font-semibold whitespace-nowrap ${item.working?"text-slate-200":"text-slate-500"}">${item.working?shortDuration(sec):"Off"}</div>
+      </div>`;
+    }).join("");
+  };
+  const shortDuration = s => {s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),sec=s%60;return `${h}j ${m}m ${sec}d`;};
+  const escapeHtml = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const showError = msg => { $("errorAlert").textContent=msg; $("errorAlert").classList.remove("hidden"); };
+  const clearError = () => $("errorAlert").classList.add("hidden");
+  const updateStats = (result, shownStart, shownStop) => {
+    const cal=Math.max(0,result.calendar||0), total=Math.max(0,result.total||0);
+    $("calendarDuration").textContent=fmtDuration(cal);
+    $("workDays").textContent=`${result.workDayCount||0} hari`;
+    $("offDays").textContent=`${result.offDayCount||0} hari`;
+    $("workRatio").textContent=cal>0?`${(total/cal*100).toFixed(1)}%`:"0%";
+    lastSummary=`SLA Schedule: ${$("scheduleName").value}\nMode: ${mode==="elapsed"?"Business Elapsed Time":"SLA Deadline"}\nStart/Created: ${fmtDateTime(shownStart)}\nStop/Deadline: ${fmtDateTime(shownStop)}\nHasil: ${$("mainResult").textContent}\n${$("mainSub").textContent}`;
+  };
+  function calculate() {
+    clearError();
+    try {
+      if(mode==="elapsed") {
+        const start=parseDate($("startInput").value), stop=parseDate($("stopInput").value);
+        if(!start||!stop||isNaN(start)||isNaN(stop)) throw new Error("Tanggal Start dan Stop harus diisi dengan benar.");
+        if(start>=stop) throw new Error("Stop Time harus lebih besar daripada Start Time.");
+        const result=calcElapsed(start,stop);
+        $("mainLabel").textContent="Business Elapsed Time";
+        $("mainResult").textContent=fmtDuration(result.total);
+        $("mainSub").textContent=`(${(result.total/3600).toFixed(4)} jam kerja efektif • ${(result.total/60).toFixed(2)} menit)`;
+        $("resultMode").textContent="Elapsed Time";
+        renderBreakdown(result.breakdown); updateStats(result,start,stop);
+      } else {
+        const start=parseDate($("createdInput").value), target=Number($("targetHours").value);
+        if(!start||isNaN(start)) throw new Error("Ticket Created harus diisi dengan benar.");
+        if(!Number.isFinite(target)||target<=0) throw new Error("Target SLA harus lebih besar dari 0 jam.");
+        const deadline=addBusinessSeconds(start,target*3600);
+        const result=calcElapsed(start,deadline.date);
+        $("mainLabel").textContent="SLA Deadline";
+        $("mainResult").textContent=fmtDateTime(deadline.date);
+        $("mainSub").textContent=`Target ${target} jam efektif • Deadline berdasarkan schedule`;
+        $("resultMode").textContent="SLA Deadline";
+        renderBreakdown(deadline.breakdown); updateStats(result,start,deadline.date);
+      }
+    } catch(err) {
+      showError(err.message||"Terjadi kesalahan dalam kalkulasi.");
+    }
+  }
+  const renderHolidays = () => {
+    const root=$("holidayList"); const keys=Object.keys(holidays).sort();
+    if(!keys.length){root.innerHTML='<span class="text-xs text-slate-500">Belum ada tanggal libur yang ditambahkan.</span>';return;}
+    root.innerHTML=keys.map(key=>`<span class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-300">${key}${holidays[key]?` · ${escapeHtml(holidays[key])}`:""}<button class="remove-holiday text-rose-300 hover:text-rose-200" data-date="${key}" aria-label="Hapus tanggal ${key}">×</button></span>`).join("");
+    root.querySelectorAll(".remove-holiday").forEach(btn=>btn.addEventListener("click",()=>{delete holidays[btn.dataset.date];renderHolidays();calculate();}));
+  };
+  const setMode = next => {
+    mode=next;
+    $("elapsedInputs").classList.toggle("hidden",mode!=="elapsed");
+    $("deadlineInputs").classList.toggle("hidden",mode!=="deadline");
+    $("modeElapsed").className=`btn ${mode==="elapsed"?"btn-primary":"btn-muted"}`;
+    $("modeDeadline").className=`btn ${mode==="deadline"?"btn-primary":"btn-muted"}`;
+    calculate();
+  };
+  const setNow = () => {
+    const d=new Date(), local=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,19);
+    if(mode==="elapsed") { $("startInput").value=local; $("stopInput").value=local; }
+    else $("createdInput").value=local;
+  };
+  $("preset8x5").addEventListener("click",()=>setPreset("8x5"));
+  $("preset24x7").addEventListener("click",()=>setPreset("24x7"));
+  $("resetBtn").addEventListener("click",()=>{
+    holidays={}; $("scheduleName").value="SLA-REQUEST-RESPONSE"; $("breakEnabled").checked=true;
+    $("breakStart").value="12:00"; $("breakEnd").value="13:00"; $("holidayEnabled").checked=true;
+    $("startInput").value="2026-11-06T16:00:00"; $("stopInput").value="2026-11-07T15:00:00";
+    $("createdInput").value="2026-11-06T16:00:00"; $("targetHours").value="8"; setPreset("8x5");
+    renderHolidays(); setMode("elapsed");
+  });
+  $("copyWeekdays").addEventListener("click",()=>{
+    for(let i=1;i<=5;i++){dayConfig[i].active=true;dayConfig[i].start=dayConfig[1].start;dayConfig[i].end=dayConfig[1].end;}
+    renderSchedule();calculate();
+  });
+  $("breakEnabled").addEventListener("change",()=>{$("breakControls").classList.toggle("opacity-40",$("breakEnabled").checked===false);calculate();});
+  $("breakStart").addEventListener("change",calculate); $("breakEnd").addEventListener("change",calculate);
+  $("holidayEnabled").addEventListener("change",calculate);
+  $("addHoliday").addEventListener("click",()=>{
+    const date=$("holidayDate").value;if(!date){showError("Pilih tanggal libur terlebih dahulu.");return;}
+    holidays[date]=$("holidayName").value.trim()||"Hari libur";
+    $("holidayDate").value="";$("holidayName").value="";renderHolidays();calculate();
+  });
+  $("modeElapsed").addEventListener("click",()=>setMode("elapsed")); $("modeDeadline").addEventListener("click",()=>setMode("deadline"));
+  $("calculateBtn").addEventListener("click",calculate);
+  ["startInput","stopInput","createdInput","targetHours","scheduleName"].forEach(id=>$(id).addEventListener("change",calculate));
+  $("sampleBtn").addEventListener("click",()=>{
+    $("startInput").value="2026-11-06T16:00:00";$("stopInput").value="2026-11-07T15:00:00";
+    $("createdInput").value="2026-11-06T16:00:00";$("targetHours").value="8";setMode("elapsed");calculate();
+  });
+  $("nowBtn").addEventListener("click",setNow);
+  $("copyBtn").addEventListener("click",async()=>{
+    try { await navigator.clipboard.writeText(lastSummary); $("copyToast").textContent="Ringkasan disalin."; }
+    catch(e){ $("copyToast").textContent="Clipboard tidak tersedia di browser ini."; }
+    $("copyToast").classList.remove("hidden");setTimeout(()=>$("copyToast").classList.add("hidden"),2200);
+  });
+  timeSelect("breakStart","12:00"); timeSelect("breakEnd","13:00");
+  renderSchedule(); renderHolidays(); calculate();
+})();
+</script>
+</body>
+</html>
